@@ -5,7 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
+
+	"github.com/fatih/color"
 )
 
 var (
@@ -13,34 +16,74 @@ var (
 	// TODO(reed): kind of awkward, since there are 2 different flag sets now:
 	//  e.g.
 	//    ironcli -token=123456789 upload -max-concurrency=10 my_worker
-	versionFlag   = flag.Bool("version", false, "what year is it")
+	versionFlag   = flag.Bool("version", false, "print the version number")
 	helpFlag      = flag.Bool("help", false, "show this")
 	hFlag         = flag.Bool("h", false, "show this")
 	tokenFlag     = flag.String("token", "", "provide OAuth token")
 	projectIDFlag = flag.String("project-id", "", "provide project ID")
 	envFlag       = flag.String("env", "", "provide specific dev environment")
 
+	red, yellow, green func(a ...interface{}) string
+
 	// i.e. worker: { commands... }
-	//			mq:			{ commands... }
-	commands map[string]map[string]Command
+	//      mq:     { commands... }
+	commands = map[string]commander{
+		"run": single{
+			new(RunCmd),
+		},
+
+		"docker": mapper{
+			"login": new(DockerLoginCmd),
+		},
+		"register": single{
+			new(RegisterCmd),
+		},
+		"worker": mapper{
+			"upload":   new(UploadCmd),
+			"queue":    new(QueueCmd),
+			"schedule": new(SchedCmd),
+			"status":   new(StatusCmd),
+			"log":      new(LogCmd),
+		},
+		"mq": mapper{
+			"push":    new(PushCmd),
+			"pop":     new(PopCmd),
+			"reserve": new(ReserveCmd),
+			"delete":  new(DeleteCmd),
+			"peek":    new(PeekCmd),
+			"clear":   new(ClearCmd),
+			"list":    new(ListCmd),
+			"create":  new(CreateCmd),
+			"rm":      new(RmCmd),
+			"info":    new(InfoCmd),
+		},
+		"lambda": mapper{
+			"create-function":  new(LambdaCreateCmd),
+			"test-function":    new(LambdaTestFunctionCmd),
+			"publish-function": new(LambdaPublishCmd),
+			"aws-import":       new(LambdaImportCmd),
+		},
+	}
 )
 
 const (
 	LINES  = "-----> "
 	BLANKS = "       "
-	INFO   = "' for more info"
+	INFO   = " for more info"
 
-	Version = "0.0.6"
+	Version = "0.1.3"
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage of", os.Args[0]+`:
-
- `, os.Args[0], `[product] [command] [flags] [args]
+	fmt.Fprintln(os.Stderr, "usage: ", os.Args[0], `[product] [command] [flags] [args]
 
 where [product] is one of:
 
-  worker
+  mq         Commands to manage messages and queues on IronMQ.
+  worker     Commands to queue and view IronWorker tasks.
+  docker     Login to Docker Registry.
+  register   Register an image or code package with IronWorker.
+  lambda     Commands to convert AWS Lambda functions to Docker containers.
 
 run '`+os.Args[0], `[product] -help for a list of commands.
 run '`+os.Args[0], `[product] [command] -help' for [command]'s flags/args.
@@ -51,43 +94,80 @@ run '`+os.Args[0], `[product] [command] -help' for [command]'s flags/args.
 }
 
 func pusage(p string) {
-	// TODO list commands
-	switch p {
-	case "worker":
+	prod, ok := commands[p]
+	if !ok {
+		fmt.Fprintln(os.Stderr, red("invalid product ", `"`+p+`", `, "see -help"))
+		os.Exit(1)
+	}
+	subs := prod.Commands()
+	if len(subs) > 0 {
 		fmt.Fprintln(os.Stderr, p, "commands:")
-		for cmd := range commands["worker"] {
+		for _, cmd := range subs {
 			fmt.Fprintln(os.Stderr, "\t", cmd)
 		}
-		os.Exit(0)
-	case "mq":
-		fmt.Fprintln(os.Stderr, "not yet")
-		os.Exit(1)
-	default:
-		fmt.Fprintln(os.Stderr, "invalid product", `"`+p+`",`, "see -help")
-		os.Exit(1)
 	}
 }
 
-func init() {
-	commands = map[string]map[string]Command{
-		"worker": map[string]Command{
-			"upload":   new(UploadCmd),
-			"queue":    new(QueueCmd),
-			"schedule": new(SchedCmd),
-			"status":   new(StatusCmd),
-			"log":      new(LogCmd),
-		},
-		// TODO mq
+type commander interface {
+	// Given a full set of command line args, call Args and Flags with
+	// whatever position needed to be sufficiently rad.
+	Command(args ...string) (Command, error)
+	Commands() []string
+}
+
+type (
+	// mapper expects > 0 args, calls flags after first arg
+	mapper map[string]Command
+	// runner calls flags on first (zeroeth) arg
+	single struct{ cmd Command }
+)
+
+func (s single) Commands() []string { return []string{} } // --help handled in Flags()
+func (s single) Command(args ...string) (Command, error) {
+	err := s.cmd.Flags(args[0:]...)
+	if err == nil {
+		err = s.cmd.Args()
 	}
+	return s.cmd, err
+}
+
+func (m mapper) Commands() []string {
+	var c []string
+	for cmd := range m {
+		c = append(c, cmd)
+	}
+	return c
+}
+
+func (m mapper) Command(args ...string) (Command, error) {
+	c, ok := m[args[0]]
+	if !ok {
+		return nil, fmt.Errorf("command not found: %s", args[0])
+	}
+	err := c.Flags(args[1:]...)
+	if err == nil {
+		err = c.Args()
+	}
+	return c, err
 }
 
 func main() {
+	if runtime.GOOS == "windows" {
+		red = fmt.Sprint
+		yellow = fmt.Sprint
+		green = fmt.Sprint
+	} else {
+		red = color.New(color.FgRed).SprintFunc()
+		yellow = color.New(color.FgYellow).SprintFunc()
+		green = color.New(color.FgGreen).SprintFunc()
+	}
+
 	flag.Parse()
 
 	if *helpFlag || *hFlag {
 		usage()
 	} else if *versionFlag {
-		fmt.Fprintln(os.Stderr, Version)
+		fmt.Println(Version)
 		os.Exit(0)
 	}
 
@@ -97,43 +177,39 @@ func main() {
 
 	product := flag.Arg(0)
 	cmds, ok := commands[product]
-	if !ok {
+	if !ok || flag.NArg() < 2 {
 		pusage(product)
-	}
-
-	if flag.NArg() < 2 {
-		pusage(product)
+		os.Exit(0)
 	}
 
 	cmdName := flag.Arg(1)
-	cmd, ok := cmds[cmdName]
+	cmd, err := cmds.Command(flag.Args()[1:]...)
 
-	if !ok {
-		switch strings.TrimSpace(cmdName) {
-		case "-h", "help", "--help", "-help":
-			pusage(product)
-		default:
-			fmt.Fprintln(os.Stderr, cmdName, "not a command, see -h")
-		}
-		os.Exit(1)
-	}
-
-	// each command defines its flags, err is either ErrHelp or bad flag value
-	if err := cmd.Flags(flag.Args()[2:]...); err != nil {
-		if err != flag.ErrHelp {
-			fmt.Println(err)
-		}
-		os.Exit(2)
-	}
-
-	if err := cmd.Args(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
-	}
-
-	err := cmd.Config()
 	if err != nil {
-		fmt.Println(err)
+		// A single command or mapper subcommand will fail with ErrHelp.
+		if err == flag.ErrHelp {
+			if cmd != nil {
+				cmd.Usage()
+			}
+			os.Exit(0)
+		} else {
+			// A mapper top level command with -h as the 'subcommand' will not fail
+			// with ErrHelp, but complain about invalid flags, so we need to handle
+			// it separately.
+			switch strings.TrimSpace(cmdName) {
+			case "-h", "help", "--help", "-help":
+				pusage(product)
+				os.Exit(0)
+			}
+
+			fmt.Fprintln(os.Stderr, red(err))
+			os.Exit(1)
+		}
+	}
+
+	err = cmd.Config()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, red(err))
 		os.Exit(2)
 	}
 

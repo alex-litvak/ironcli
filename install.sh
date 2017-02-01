@@ -1,16 +1,15 @@
 #!/bin/sh
 set -e
 #
-# TODO urls
 # This script is meant for quick & easy install via:
-#   'curl -sSL http://get.iron.io/cli | sh'
+#   'curl -sSL https://cli.iron.io/install | sh'
 # or:
-#   'wget -qO- http://get.iron.io/cli | sh'
+#   'wget -qO- https://cli.iron.io/install | sh'
 #
 
 # UPDATE RELEASE HERE AFTER A NEW VERSION IS RELEASED
 # TODO latest ?
-release='v0.0.6'
+release='0.1.3'
 
 command_exists() {
   command -v "$@" > /dev/null 2>&1
@@ -50,7 +49,7 @@ fi
 
 curl=''
 if command_exists curl; then
-  curl='curl -sSL -o '
+  curl='curl -sSL -o'
 elif command_exists wget; then
   curl='wget -qO'
 elif command_exists busybox && busybox --list-modules | grep -q wget; then
@@ -66,21 +65,21 @@ url='https://github.com/iron-io/ironcli/releases/download'
 # perform some very rudimentary platform detection
 case "$(uname)" in
   Linux)
-    $sh_c "$curl/usr/local/bin/iron $url/$release/ironcli_linux"
+    $sh_c "$curl /usr/local/bin/iron $url/$release/ironcli_linux"
     $sh_c "chmod +x /usr/local/bin/iron"
-    iron --version
+    /usr/local/bin/iron --version
     exit 0
     ;;
   Darwin)
-    $sh_c "$curl/usr/local/bin/iron $url/$release/ironcli_mac"
+    $sh_c "$curl /usr/local/bin/iron $url/$release/ironcli_mac"
     $sh_c "chmod +x /usr/local/bin/iron"
-    iron --version
+    /usr/local/bin/iron --version
     exit 0
     ;;
   WindowsNT)
-    $sh_c "$curl$url/$release/ironcli.exe"
+    $sh_c "$curl $url/$release/ironcli.exe"
     # TODO how to make executable? chmod?
-    iron --version
+    ironcli.exe --version
     exit 0
     ;;
 esac
@@ -95,4 +94,3 @@ cat >&2 <<'EOF'
 
 EOF
 exit 1
-

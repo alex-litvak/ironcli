@@ -1,82 +1,95 @@
-ironcli
-=======
+# IronCLI
 
-Go version of the Iron.io command line tools.  
+Go version of the Iron.io command line tools.
 
-# Install
+## Install
 
-## Quick and Easy (Recommended)
+### Quick and Easy (Recommended)
 
-`curl -sSL http://get.iron.io/cli | sh`
+`curl -sSL https://cli.iron.io/install | sh`
 
-## Download Yourself
+If you're concerned about the [potential insecurity](http://curlpipesh.tumblr.com/)
+of using `curl | sh`, feel free to use a two-step version of our installation and examine our
+installation script:
 
-Grab the latest version for your system on the [Releases](https://github.com/iron-io/ironcli/releases) page. 
+```bash
+curl -f -sSL https://cli.iron.io/install -O
+sh install
+```
 
-You can either run the binary directly or add somewhere in your $PATH. 
+#### `curl | sh` as an Installation Method?
 
-## Coming soon...
+We'd like to explain why we're telling you to `curl | sh` to install this software.
+The script at https://cli.iron.io/install has some relatively simple logic to download the
+right `ironcli` binary for your platform. When you run that script by piping the `curl` output
+into `sh`, you're trusting us that it's safe and won't harm your computer. We hope that you do!
+But if you don't please see the section just below this one on how to download and run the binary
+yourself without an install script.
 
-Homebrew/deb/msi installer coming...
+### See [other installation methods](#other-installation-methods) for more options.
 
-# Before Getting Started
+## Getting Started
+
+#### Before Getting Started
 
 Before you can use IronWorker, be sure you've [created a free account with
-Iron.io](http://www.iron.io)
-and [setup your Iron.io credentials on your
+Iron.io](http://www.iron.io) and [setup your Iron.io credentials on your
 system](http://dev.iron.io/worker/reference/configuration/) (either in a json
 file or using ENV variables). You only need to do that once for your machine. If
 you've done that, then you can continue.
 
-# Help
+[See the official docs](http://dev.iron.io/worker/cli/) for more detailed info on using Docker for IronWorker.
 
-`iron worker --help` for list of commands, flags
-`iron worker COMMAND --help` for command specific help
+#### Actually Getting Started
 
-# Currently supported commands
+The easiest way to get started is by digging around.
 
-__WARNING:__ still in progress (only upload problematic), if running into issues: use `github.com/iron-io/iron_worker_ruby_ng`
+`$ iron --help` for example usage and a list of commands
 
-### Queue a task: 
+## Contributing
 
-`iron worker queue CODENAME`
+Give us a pull request! File a bug!
 
-### Wait for queued task and print log: 
+Since go1.5, we are lab rats in the go1.5 vendoring experiment. This eliminates
+the need to modify import paths and depend on package maintainers not to break things.
+For more info, see: <https://golang.org/s/go15vendor>.
 
-`iron worker queue --wait CODENAME`
+We use [glide](http://glide.sh) to manage the vendoring. To build ironcli:
 
-### Status of task:
+```sh
+export GO15VENDOREXPERIMENT=1
+glide install
+go build
+```
 
-`iron worker status TASK_ID`
+## Other Installation Methods
 
-Hint: Acquire `TASK_ID` from a previously queued task.
+### Download Yourself
 
-### Log task:
+Grab the latest version for your system on the [Releases](https://github.com/iron-io/ironcli/releases) page.
 
-`iron worker log TASK_ID`
+You can either run the binary directly or add somewhere in your $PATH.
 
-Hint: Acquire `TASK_ID` from a previously queued task.
+### Use the iron/cli Docker image
 
-### Schedule task:
+If you have Docker installed, then you don't need to install anything else to use this.
+All the commands are the same, but instead of starting the command with `iron`, change it to:
 
-`iron worker schedule --payload=" " --start-at="Mon Dec 25 15:04:05 -0700 2014" CODENAME`
+```sh
+docker run --rm -it -v "$PWD":/app -w /app iron/cli ...
+```
 
-__WARNING:__ not working without a -payload for reasons yet to be hunted down
+If you're using the Docker image, you either need to have your `iron.json` file in the local directory (it won't pick it up from $HOME),
+or set your Iron credentials in environment variables:
 
-### Upload a task:
+```sh
+export IRON_TOKEN=YOURTOKEN
+export IRON_PROJECT_ID=YOURPROJECT_ID
+```
 
-With a .worker in current directory (see /test\_worker):
+And then use `-e` flags with the docker run command:
 
-`iron worker upload WORKER`
+```sh
+docker run --rm -it -e IRON_TOKEN -e IRON_PROJECT_ID -v "$PWD":/app -w /app iron/cli ...
+```
 
-Currently, runtime specific dependencies are not supported. "file" and "dir"
-should work fine. "full\_remote\_build" also not yet supported.
-
-### Run a task locally (useful for testing):
-
-`iron worker run WORKER`
-
-Where WORKER is the name of a .worker file.
-
-Due to environment disparities, this could not work on a local environment yet
-work fine once uploaded. Things should work best under amd64 Ubuntu Linux.
